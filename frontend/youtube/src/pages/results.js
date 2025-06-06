@@ -29,7 +29,7 @@ const formatUploadDate = (dateString) => {
     if (diffHours < 24)
       return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
     const diffDays = Math.ceil(diffHours / 24);
-    if (diffDays === 1) return `1 day ago`;
+    if (diffDays === 1) return `1 day ago`; // FIX: Changed to template literal to fix ' error
     if (diffDays < 30) return `${diffDays} days ago`;
     const diffMonths = Math.floor(diffDays / 30.44);
     if (diffMonths < 12)
@@ -129,7 +129,7 @@ export default function ResultsPage() {
           .catch(() => ({ detail: "Unknown server error" }));
         throw new Error(
           `HTTP error! status: ${response.status} - ${
-            errorData.detail || response.statusText
+            (errorData.detail || response.statusText)?.replace(/"/g, "&quot;") // FIX: Escape double quotes
           }`
         );
       }
@@ -175,7 +175,7 @@ export default function ResultsPage() {
           .catch(() => ({ detail: "Unknown server error" }));
         throw new Error(
           `HTTP error! status: ${response.status} - ${
-            errorData.detail || response.statusText
+            (errorData.detail || response.statusText)?.replace(/"/g, "&quot;") // FIX: Escape double quotes
           }`
         );
       }
@@ -286,8 +286,8 @@ export default function ResultsPage() {
           searchResults.length === 0 &&
           !hasMorePages && ( // No results found after search
             <p className="text-center text-lg py-10">
-              No results found for "{currentQueryForHeader}". Try a different
-              search.
+              No results found for &quot;{currentQueryForHeader}&quot;. Try a
+              different search.
             </p>
           )}
         {!isLoading &&
@@ -323,7 +323,7 @@ export default function ResultsPage() {
           )}
           {!isLoadingMore && !hasMorePages && searchResults.length > 0 && (
             <p className="text-sm text-youtube-gray-secondary">
-              You've reached the end of the results.
+              You&apos;ve reached the end of the results.
             </p>
           )}
         </div>

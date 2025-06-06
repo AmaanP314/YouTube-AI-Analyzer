@@ -47,6 +47,19 @@ export default function DescriptionBox({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Call useMemo unconditionally
+  const processedDescription = useMemo(
+    () => (videoInfo ? linkifyText(videoInfo.description) : []), // Handle videoInfo being null initially
+    [videoInfo?.description] // Depend on videoInfo.description safely
+  );
+
+  const toggleExpand = () => setIsExpanded(!isExpanded);
+
+  // Show only a few lines initially if description is long
+  const needsExpansion =
+    videoInfo?.description?.split("\n").length > 3 ||
+    videoInfo?.description?.length > 200;
+
   if (!videoInfo) {
     return (
       <div className="mt-4 p-3 bg-youtube-dark-secondary rounded-xl animate-pulse h-24">
@@ -54,19 +67,6 @@ export default function DescriptionBox({
       </div>
     );
   }
-
-  const toggleExpand = () => setIsExpanded(!isExpanded);
-
-  // Use useMemo to process description only when it changes
-  const processedDescription = useMemo(
-    () => linkifyText(videoInfo.description),
-    [videoInfo.description]
-  );
-
-  // Show only a few lines initially if description is long
-  const needsExpansion =
-    videoInfo.description?.split("\n").length > 3 ||
-    videoInfo.description?.length > 200;
 
   return (
     <div
