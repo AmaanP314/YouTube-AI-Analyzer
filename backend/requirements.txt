@@ -1,0 +1,11 @@
+pandas==2.2.3
+aiohttp==3.11.11
+isodate==0.6.1
+gunicorn==23.0.0
+uvicorn
+fastapi
+langchain
+langchain-google-genai
+langchain_community
+faiss-cpu
+youtube_transcript_api

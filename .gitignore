@@ -1,0 +1,27 @@
+# Global ignores
+.DS_Store
+.env
+myenv
+*.log
+*.local
+
+# Backend-specific ignores
+/backend/.env
+/backend/myenv
+/backend/__pycache__/
+/backend/*.pyc
+/backend/.venv/
+/backend/env/
+/backend/.pytest_cache/
+/backend/*.sqlite3
+
+# Frontend-specific ignores (Next.js / Node.js)
+/frontend/youtube/node_modules/
+/frontend/youtube/.next/
+/frontend/youtube/.env
+/frontend/youtube/package-lock.json
+/frontend/youtube/yarn.lock
+/frontend/youtube/.turbo/
+/frontend/youtube/.vercel/
+/frontend/youtube/out/
+/frontend/youtube/dist/
