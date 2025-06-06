@@ -28,10 +28,10 @@ export default function LandingPage() {
       <main className="flex-grow flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-3xl font-semibold text-youtube-gray-primary mb-4">
-            Welcome to YouTube Clone
+            Welcome to YouTube AI Analyzer
           </h1>
           <p className="text-youtube-gray-secondary">
-            Use the search bar above to find videos.
+            Use the search bar above to get started!
           </p>
         </div>
       </main>

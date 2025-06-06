@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { Send, Loader2 } from "lucide-react";
 import AnswerSkeleton from "../placeholders/AnswerSkeleton";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 const customRenderers = {
   p: ({ node, ...props }) => <p className="mb-2 leading-relaxed" {...props} />,
   strong: ({ node, ...props }) => (
@@ -48,7 +49,7 @@ export default function QASection({ videoId, activeContext, isEnabled }) {
           )}`;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000${endpoint}`);
+      const res = await fetch(`${apiUrl}${endpoint}`);
       const data = await res.json();
 
       if (!res.ok) {

@@ -10,6 +10,7 @@ import QASection from "../components/video/QASection";
 import SentimentDistributionChart from "../components/visualizations/SentimentDistributionChart";
 import SentimentChartSkeleton from "../components/placeholders/SentimentChartSkeleton";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 // --- UTILITY FUNCTIONS ---
 const formatViews = (views) => {
   if (views === undefined || views === null || isNaN(views)) return "N/A";
@@ -70,7 +71,7 @@ export default function WatchPage() {
     setIsLoadingVideo(true);
     setErrorVideo(null);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/video/${videoId}`);
+      const response = await fetch(`${apiUrl}/video/${videoId}`);
       if (!response.ok) {
         const errorData = await response
           .json()
@@ -164,9 +165,7 @@ export default function WatchPage() {
       setAreSentimentsReady(false);
       let rawComments = [];
       try {
-        const commentsRes = await fetch(
-          `http://127.0.0.1:8000/comments/${videoId}`
-        );
+        const commentsRes = await fetch(`${apiUrl}/comments/${videoId}`);
         if (!commentsRes.ok)
           throw new Error(`Comments Fetch: ${commentsRes.statusText}`);
         const commentsData = await commentsRes.json();
@@ -188,14 +187,11 @@ export default function WatchPage() {
         setErrorSentiments(null);
         const commentTexts = rawComments.map((c) => c.CommentText);
         try {
-          const sentimentsRes = await fetch(
-            `http://127.0.0.1:8000/comments/sentiments`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ comments: commentTexts }),
-            }
-          );
+          const sentimentsRes = await fetch(`${apiUrl}/comments/sentiments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ comments: commentTexts }),
+          });
           if (!sentimentsRes.ok)
             throw new Error(`Sentiments Fetch: ${sentimentsRes.statusText}`);
           const sentimentsData = await sentimentsRes.json();
@@ -236,9 +232,7 @@ export default function WatchPage() {
       setIsLoadingVideoSummary(true);
       setErrorVideoSummary(null);
       try {
-        const videoRes = await fetch(
-          `http://127.0.0.1:8000/video/summarize/${videoId}`
-        );
+        const videoRes = await fetch(`${apiUrl}/video/summarize/${videoId}`);
         if (!videoRes.ok) {
           throw new Error(`Video Summary: ${videoRes.statusText}`);
         }
@@ -256,7 +250,7 @@ export default function WatchPage() {
       setErrorCommentSummary(null);
       try {
         const commentRes = await fetch(
-          `http://127.0.0.1:8000/comments/summarize/${videoId}`
+          `${apiUrl}/comments/summarize/${videoId}`
         );
         if (!commentRes.ok) {
           throw new Error(`Comment Summary: ${commentRes.statusText}`);

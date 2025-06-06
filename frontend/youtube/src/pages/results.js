@@ -5,6 +5,7 @@ import SearchResultItem from "../components/results/SearchResultItem";
 import SearchResultSkeleton from "../components/placeholders/SearchResultSkeleton";
 import { Loader2 } from "lucide-react";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 // Utility functions (ideally move to a shared utils.js file)
 const formatViews = (views) => {
   if (!views || isNaN(views)) return "N/A";
@@ -118,7 +119,7 @@ export default function ResultsPage() {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/search?query=${encodeURIComponent(
+        `${apiUrl}/search?query=${encodeURIComponent(
           query
         )}&max_results=${MAX_RESULTS_PER_PAGE}`
       );
@@ -164,7 +165,7 @@ export default function ResultsPage() {
     const query = Array.isArray(search_query) ? search_query[0] : search_query;
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/search?query=${encodeURIComponent(
+        `${apiUrl}/search?query=${encodeURIComponent(
           query
         )}&max_results=${MAX_RESULTS_PER_PAGE}&page_token=${nextPageToken}`
       );
