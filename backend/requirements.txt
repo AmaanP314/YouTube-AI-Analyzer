@@ -8,4 +8,4 @@ langchain
 langchain-google-genai
 langchain_community
 faiss-cpu
-youtube_transcript_api
+yt-dlp

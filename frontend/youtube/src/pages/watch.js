@@ -11,7 +11,7 @@ import SentimentDistributionChart from "../components/visualizations/SentimentDi
 import SentimentChartSkeleton from "../components/placeholders/SentimentChartSkeleton";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-// --- UTILITY FUNCTIONS ---
+
 const formatViews = (views) => {
   if (views === undefined || views === null || isNaN(views)) return "N/A";
   if (views < 1000) return views.toString();
@@ -19,6 +19,7 @@ const formatViews = (views) => {
     return (views / 1000).toFixed(1).replace(/\.0$/, "") + "K";
   return (views / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
 };
+
 const formatAbsoluteDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
@@ -32,6 +33,7 @@ const formatAbsoluteDate = (dateString) => {
     return "Invalid Date";
   }
 };
+
 const stripHtml = (html) => {
   if (typeof document !== "undefined") {
     const doc = new DOMParser().parseFromString(html, "text/html");
@@ -48,16 +50,19 @@ export default function WatchPage() {
   const [videoData, setVideoData] = useState(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
   const [errorVideo, setErrorVideo] = useState(null);
-  const [initialHeaderQuery, setInitialHeaderQuery] = useState(""); // For the header on this page
+  const [initialHeaderQuery, setInitialHeaderQuery] = useState("");
 
-  // ... (All other state variables for comments, sentiments, summaries remain the same)
+  // Comments State
   const [commentsWithSentiments, setCommentsWithSentiments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
-  const [isLoadingSentiments, setIsLoadingSentiments] = useState(false);
   const [errorComments, setErrorComments] = useState(null);
+  const [isLoadingSentiments, setIsLoadingSentiments] = useState(false);
   const [errorSentiments, setErrorSentiments] = useState(null);
   const [areSentimentsReady, setAreSentimentsReady] = useState(false);
+  const [hasCommentsFetchedInitially, setHasCommentsFetchedInitially] =
+    useState(false);
 
+  // Summaries State
   const [activeSummaryContext, setActiveSummaryContext] = useState("video");
   const [videoSummary, setVideoSummary] = useState("");
   const [commentSummary, setCommentSummary] = useState("");
@@ -66,7 +71,7 @@ export default function WatchPage() {
   const [errorVideoSummary, setErrorVideoSummary] = useState(null);
   const [errorCommentSummary, setErrorCommentSummary] = useState(null);
 
-  // Function to fetch video details directly (if not from session storage)
+  // Function to fetch video details directly from API
   const fetchVideoDetailsDirectly = async (videoId) => {
     setIsLoadingVideo(true);
     setErrorVideo(null);
@@ -116,9 +121,10 @@ export default function WatchPage() {
     }
   };
 
-  // Effect for initial video data & header query
+  // Phase 1: Load videoData from sessionStorage or fetch directly
   useEffect(() => {
-    const lastGlobalQuery = sessionStorage.getItem("youtubeLastSearchQuery"); // Use the query from results page
+    // Get last search query for header
+    const lastGlobalQuery = sessionStorage.getItem("youtubeLastSearchQuery");
     if (lastGlobalQuery) {
       setInitialHeaderQuery(lastGlobalQuery);
     }
@@ -139,102 +145,139 @@ export default function WatchPage() {
         if (storedVideoData.id === videoIdFromQuery) {
           setVideoData(storedVideoData);
           setIsLoadingVideo(false);
-          return;
+          return; // Exit if data found in session storage
         }
       } catch (e) {
         console.error("Error parsing video data from sessionStorage:", e);
         sessionStorage.removeItem("currentWatchVideoData");
       }
     }
+    // If not in session storage or ID mismatch, fetch directly
     fetchVideoDetailsDirectly(videoIdFromQuery);
   }, [videoIdFromQuery]);
 
-  // ... (useEffect for comments & sentiments remains the same)
+  // Phase 2: Fetch Comments when videoData is available
   useEffect(() => {
     if (!videoData?.id) {
       setIsLoadingComments(false);
       setCommentsWithSentiments([]);
       setAreSentimentsReady(false);
+      setHasCommentsFetchedInitially(false); // Reset this state
       return;
     }
+
     const videoId = videoData.id;
-    const fetchCommentsAndSentiments = async () => {
+    const fetchComments = async () => {
       setIsLoadingComments(true);
       setErrorComments(null);
       setCommentsWithSentiments([]);
       setAreSentimentsReady(false);
-      let rawComments = [];
+      setHasCommentsFetchedInitially(false); // Set to false before fetching
+
       try {
         const commentsRes = await fetch(`${apiUrl}/comments/${videoId}`);
-        if (!commentsRes.ok)
-          throw new Error(`Comments Fetch: ${commentsRes.statusText}`);
+        if (!commentsRes.ok) {
+          const errorData = await commentsRes
+            .json()
+            .catch(() => ({ detail: "Unknown server error" }));
+          throw new Error(
+            `Comments Fetch: ${errorData.detail || commentsRes.statusText}`
+          );
+        }
+
         const commentsData = await commentsRes.json();
         if (commentsData.error) throw new Error(commentsData.error);
-        rawComments = commentsData.results || [];
+
+        const rawComments = commentsData.results || [];
         setCommentsWithSentiments(
           rawComments.map((c) => ({ ...c, sentiment: null }))
         );
       } catch (err) {
         console.error("Error fetching comments:", err);
         setErrorComments(err.message);
+        setCommentsWithSentiments([]);
+      } finally {
         setIsLoadingComments(false);
-        return;
-      }
-      setIsLoadingComments(false);
-
-      if (rawComments.length > 0) {
-        setIsLoadingSentiments(true);
-        setErrorSentiments(null);
-        const commentTexts = rawComments.map((c) => c.CommentText);
-        try {
-          const sentimentsRes = await fetch(`${apiUrl}/comments/sentiments`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ comments: commentTexts }),
-          });
-          if (!sentimentsRes.ok)
-            throw new Error(`Sentiments Fetch: ${sentimentsRes.statusText}`);
-          const sentimentsData = await sentimentsRes.json();
-          if (sentimentsData.error) throw new Error(sentimentsData.error);
-          const fetchedSentiments = sentimentsData.results || [];
-          const mergedComments = rawComments.map((comment, index) => ({
-            ...comment,
-            sentiment: fetchedSentiments[index] || null,
-          }));
-          setCommentsWithSentiments(mergedComments);
-          setAreSentimentsReady(true);
-        } catch (err) {
-          console.error("Error fetching sentiments:", err);
-          setErrorSentiments(err.message);
-          setCommentsWithSentiments(
-            rawComments.map((c) => ({ ...c, sentiment: null }))
-          );
-          setAreSentimentsReady(false);
-        } finally {
-          setIsLoadingSentiments(false);
-        }
-      } else {
-        setAreSentimentsReady(true);
+        setHasCommentsFetchedInitially(true); // Set to true after comments fetch completes
       }
     };
-    fetchCommentsAndSentiments();
-  }, [videoData?.id]);
 
-  // ... (useEffect for summaries remains the same)
+    fetchComments();
+  }, [videoData?.id]); // Dependency on videoData.id
+
+  // Phase 3: Fetch Sentiments, Video Summary, and Comment Summary in parallel
   useEffect(() => {
-    if (!videoData?.id) {
-      setIsLoadingVideoSummary(false);
-      setIsLoadingCommentSummary(false);
+    // Only run if videoData.id is available AND comments fetching has completed (successfully or not)
+    if (!videoData?.id || !hasCommentsFetchedInitially) {
       return;
     }
+
     const videoId = videoData.id;
-    const fetchAllSummaries = async () => {
-      setIsLoadingVideoSummary(true);
-      setErrorVideoSummary(null);
+    const currentComments = commentsWithSentiments.map((c) => c.CommentText);
+
+    // Reset sentiment and summary states before new fetches
+    setIsLoadingSentiments(true);
+    setErrorSentiments(null);
+    setAreSentimentsReady(false);
+
+    setIsLoadingVideoSummary(true);
+    setErrorVideoSummary(null);
+    setIsLoadingCommentSummary(true);
+    setErrorCommentSummary(null);
+
+    // Prepare all parallel promises
+    const sentimentPromise = (async () => {
+      if (currentComments.length === 0) {
+        setAreSentimentsReady(true);
+        setIsLoadingSentiments(false);
+        return; // No comments to analyze
+      }
+      try {
+        const sentimentsRes = await fetch(`${apiUrl}/comments/sentiments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ comments: currentComments }),
+        });
+        if (!sentimentsRes.ok) {
+          const errorData = await sentimentsRes
+            .json()
+            .catch(() => ({ detail: "Unknown server error" }));
+          throw new Error(
+            `Sentiments Fetch: ${errorData.detail || sentimentsRes.statusText}`
+          );
+        }
+        const sentimentsData = await sentimentsRes.json();
+        if (sentimentsData.error) throw new Error(sentimentsData.error);
+
+        setCommentsWithSentiments((prevComments) =>
+          prevComments.map((comment, index) => ({
+            ...comment,
+            sentiment: sentimentsData.results[index] || null,
+          }))
+        );
+      } catch (err) {
+        console.error("Error fetching sentiments:", err);
+        setErrorSentiments(err.message);
+        // Ensure comments are still displayed even if sentiments fail
+        setCommentsWithSentiments((prevComments) =>
+          prevComments.map((c) => ({ ...c, sentiment: null }))
+        );
+      } finally {
+        setIsLoadingSentiments(false);
+        setAreSentimentsReady(true); // Sentiments attempt is done
+      }
+    })();
+
+    const videoSummaryPromise = (async () => {
       try {
         const videoRes = await fetch(`${apiUrl}/video/summarize/${videoId}`);
         if (!videoRes.ok) {
-          throw new Error(`Video Summary: ${videoRes.statusText}`);
+          const errorData = await videoRes
+            .json()
+            .catch(() => ({ detail: "Unknown server error" }));
+          throw new Error(
+            `Video Summary: ${errorData.detail || videoRes.statusText}`
+          );
         }
         const data = await videoRes.json();
         setVideoSummary(data.results || "");
@@ -245,15 +288,27 @@ export default function WatchPage() {
       } finally {
         setIsLoadingVideoSummary(false);
       }
+    })();
 
-      setIsLoadingCommentSummary(true);
-      setErrorCommentSummary(null);
+    const commentSummaryPromise = (async () => {
+      // Only attempt comment summary if there are comments
+      if (currentComments.length === 0) {
+        setCommentSummary("");
+        setErrorCommentSummary("No comments available for summarization.");
+        setIsLoadingCommentSummary(false);
+        return;
+      }
       try {
         const commentRes = await fetch(
           `${apiUrl}/comments/summarize/${videoId}`
         );
         if (!commentRes.ok) {
-          throw new Error(`Comment Summary: ${commentRes.statusText}`);
+          const errorData = await commentRes
+            .json()
+            .catch(() => ({ detail: "Unknown server error" }));
+          throw new Error(
+            `Comment Summary: ${errorData.detail || commentRes.statusText}`
+          );
         }
         const data = await commentRes.json();
         setCommentSummary(data.results || "");
@@ -264,9 +319,15 @@ export default function WatchPage() {
       } finally {
         setIsLoadingCommentSummary(false);
       }
-    };
-    fetchAllSummaries();
-  }, [videoData?.id]);
+    })();
+
+    // Run all promises in parallel
+    Promise.allSettled([
+      sentimentPromise,
+      videoSummaryPromise,
+      commentSummaryPromise,
+    ]);
+  }, [videoData?.id, hasCommentsFetchedInitially]); // Dependency on hasCommentsFetchedInitially
 
   const displayVideoData = useMemo(() => {
     if (!videoData) return null;
@@ -343,6 +404,7 @@ export default function WatchPage() {
       </div>
     );
   }
+
   if (errorVideo) {
     return (
       <div className="min-h-screen bg-youtube-dark font-inter text-white">
@@ -360,6 +422,7 @@ export default function WatchPage() {
       </div>
     );
   }
+
   if (!displayVideoData) {
     return (
       <div className="min-h-screen bg-youtube-dark font-inter text-white">
@@ -383,8 +446,7 @@ export default function WatchPage() {
       <Header
         initialQuery={initialHeaderQuery}
         onSearch={handleHeaderSearchOnWatchPage}
-      />{" "}
-      {/* Use the new handler */}
+      />
       <main className="w-full px-2 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-6 flex flex-col lg:flex-row gap-6 flex-grow">
         {/* Left Column */}
         <div className="w-full lg:flex-grow min-w-0">
