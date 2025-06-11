@@ -9,19 +9,13 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  display: none; /* Hides the scrollbar visually */
+  width: 0; /* Ensures no width is taken by the scrollbar */
+  background: transparent; /* Makes the scrollbar track transparent */
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #777;
-}
+
+/* Hide scrollbar for IE, Edge, and Firefox */
 .custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #555 transparent;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }

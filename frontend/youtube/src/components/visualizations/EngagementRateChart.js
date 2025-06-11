@@ -7,7 +7,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  LabelList,
 } from "recharts";
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -24,18 +23,32 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function EngagementRateChart({ videoData }) {
+const trimTitle = (title, maxLength = 25) => {
+  if (!title) return "";
+  if (title.length > maxLength) {
+    return title.substring(0, maxLength) + "...";
+  }
+  return title;
+};
+
+export default function EngagementRateChart({
+  videoData,
+  onBarClick,
+  highlightedVideoId,
+}) {
   const chartData = useMemo(() => {
     if (!videoData || videoData.length === 0) return [];
     return videoData
       .map((v) => ({
         ...v,
-        engagementRate: parseFloat(v.likesPercentage?.toFixed(2) || 0), // Use camelCase key
-        truncatedTitle:
-          v.title.length > 20 ? `${v.title.substring(0, 20)}...` : v.title,
+        engagementRate: parseFloat(v.likesPercentage?.toFixed(2) || 0),
+        truncatedTitle: trimTitle(v.title, 25),
       }))
       .sort((a, b) => b.engagementRate - a.engagementRate);
   }, [videoData]);
+
+  const defaultColor = (rate) =>
+    rate > 3 ? "#22c55e" : rate > 1.5 ? "#eab308" : "#ef4444";
 
   return (
     <div className="p-3 bg-youtube-dark-secondary rounded-xl mt-4">
@@ -43,64 +56,43 @@ export default function EngagementRateChart({ videoData }) {
         Engagement Rate (%)
       </h3>
       <ResponsiveContainer width="100%" height={250}>
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            overflowX: "auto",
-            overflowY: "hidden",
+        <BarChart
+          data={chartData}
+          margin={{ top: 0, right: 0, left: -25, bottom: 0 }}
+          onClick={(state) => {
+            if (state && state.activeTooltipIndex !== undefined) {
+              const clickedData = chartData[state.activeTooltipIndex];
+              if (clickedData && onBarClick) {
+                onBarClick(clickedData);
+              }
+            }
           }}
         >
-          <div
-            style={{
-              width: `${Math.max(100, chartData.length * 50)}%`,
-              height: "100%",
-            }}
+          <XAxis
+            dataKey="truncatedTitle"
+            tick={false}
+            axisLine={{ stroke: "#8C92AC" }}
+          />
+          <YAxis tick={{ fontSize: 10, fill: "#aaa" }} unit="%" />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar
+            dataKey="engagementRate"
+            onClick={onBarClick}
+            cursor="pointer"
+            animationDuration={500}
           >
-            <BarChart
-              data={chartData}
-              margin={{ top: 15, right: 10, left: -20, bottom: 50 }}
-            >
-              <XAxis
-                dataKey="truncatedTitle"
-                angle={-45}
-                textAnchor="end"
-                height={60}
-                tick={{ fontSize: 10, fill: "#aaa" }}
-                interval={0}
+            {chartData.map((entry) => (
+              <Cell
+                key={`cell-${entry.id}`}
+                fill={
+                  entry.id === highlightedVideoId
+                    ? "#f472b6"
+                    : defaultColor(entry.engagementRate)
+                }
               />
-              <YAxis tick={{ fontSize: 10, fill: "#aaa" }} unit="%" />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ fill: "rgba(100,100,100,0.1)" }}
-              />
-              <Bar
-                dataKey="engagementRate"
-                radius={[4, 4, 0, 0]}
-                animationDuration={800}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={
-                      entry.engagementRate > 3
-                        ? "#22c55e"
-                        : entry.engagementRate > 1.5
-                        ? "#eab308"
-                        : "#ef4444"
-                    }
-                  />
-                ))}
-                <LabelList
-                  dataKey="engagementRate"
-                  position="top"
-                  style={{ fill: "#aaa", fontSize: 10 }}
-                  formatter={(value) => `${value}%`}
-                />
-              </Bar>
-            </BarChart>
-          </div>
-        </div>
+            ))}
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

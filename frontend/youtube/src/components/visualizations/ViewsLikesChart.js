@@ -9,12 +9,13 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
+  Cell,
 } from "recharts";
 
 const formatAxisTick = (tick) => {
   if (tick >= 1000000) return `${tick / 1000000}M`;
   if (tick >= 1000) return `${tick / 1000}K`;
-  return tick;
+  return tick.toLocaleString();
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -27,7 +28,7 @@ const CustomTooltip = ({ active, payload, label }) => {
         <p style={{ color: "#8884d8" }}>{`Views: ${
           payload[0]?.value?.toLocaleString() || "N/A"
         }`}</p>
-        <p style={{ color: "#82ca9d" }}>{`Likes: ${
+        <p style={{ color: "#22c55e" }}>{`Likes: ${
           payload[1]?.value?.toLocaleString() || "N/A"
         }`}</p>
       </div>
@@ -36,13 +37,24 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function ViewsLikesChart({ videoData }) {
+const trimTitle = (title, maxLength = 25) => {
+  if (!title) return "";
+  if (title.length > maxLength) {
+    return title.substring(0, maxLength) + "...";
+  }
+  return title;
+};
+
+export default function ViewsLikesChart({
+  videoData,
+  onBarClick,
+  highlightedVideoId,
+}) {
   const chartData = useMemo(() => {
     if (!videoData || videoData.length === 0) return [];
     return videoData.map((v) => ({
       ...v,
-      truncatedTitle:
-        v.title.length > 20 ? `${v.title.substring(0, 20)}...` : v.title,
+      truncatedTitle: trimTitle(v.title, 25),
     }));
   }, [videoData]);
 
@@ -52,69 +64,82 @@ export default function ViewsLikesChart({ videoData }) {
         Views vs. Likes
       </h3>
       <ResponsiveContainer width="100%" height={250}>
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            overflowX: "auto",
-            overflowY: "hidden",
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 5, right: -25, left: -25, bottom: 0 }}
+          onClick={(state) => {
+            if (state && state.activePayload && state.activePayload.length) {
+              const clickedVideo = state.activePayload[0].payload;
+              if (clickedVideo && onBarClick) {
+                onBarClick(clickedVideo);
+              }
+            }
           }}
         >
-          <div
-            style={{
-              width: `${Math.max(100, chartData.length * 50)}%`,
-              height: "100%",
-            }}
+          <CartesianGrid strokeDasharray="3 3" stroke="#303030" />
+          <XAxis
+            dataKey="truncatedTitle"
+            tick={false}
+            axisLine={{ stroke: "#303030" }}
+          />
+          <YAxis
+            yAxisId="left"
+            stroke="#8884d8"
+            tickFormatter={formatAxisTick}
+            tick={{ fontSize: 10, fill: "#aaa" }}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            stroke="#22c55e"
+            tickFormatter={formatAxisTick}
+            tick={{ fontSize: 10, fill: "#aaa" }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ fontSize: "10px" }} />
+          <Bar
+            yAxisId="left"
+            dataKey="views"
+            name="Views"
+            barSize={20}
+            onClick={onBarClick}
+            cursor="pointer"
+            animationDuration={500}
           >
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 5, right: 10, left: -20, bottom: 50 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#303030" />
-              <XAxis
-                dataKey="truncatedTitle"
-                angle={-45}
-                textAnchor="end"
-                height={60}
-                tick={{ fontSize: 10, fill: "#aaa" }}
-                interval={0}
+            {chartData.map((entry) => (
+              <Cell
+                key={`cell-${entry.id}`}
+                fill={entry.id === highlightedVideoId ? "#c084fc" : "#8884d8"}
               />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                stroke="#8884d8"
-                tickFormatter={formatAxisTick}
-                tick={{ fontSize: 10, fill: "#aaa" }}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                stroke="#82ca9d"
-                tickFormatter={formatAxisTick}
-                tick={{ fontSize: 10, fill: "#aaa" }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
-              <Bar
-                yAxisId="left"
-                dataKey="views"
-                name="Views"
-                barSize={20}
-                fill="#8884d8"
-                animationDuration={800}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="likes"
-                name="Likes"
-                stroke="#82ca9d"
-                strokeWidth={2}
-                animationDuration={800}
-              />
-            </ComposedChart>
-          </div>
-        </div>
+            ))}
+          </Bar>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="likes"
+            name="Likes"
+            stroke="#22c55e"
+            strokeWidth={2}
+            dot={(props) => {
+              const { cx, cy, payload } = props;
+              if (payload.id === highlightedVideoId) {
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={5}
+                    fill="#22c55e"
+                    stroke="white"
+                    strokeWidth={2}
+                  />
+                );
+              }
+              return <circle cx={cx} cy={cy} r={2} fill="#22c55e" />;
+            }}
+            activeDot={{ r: 6 }}
+            animationDuration={500}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

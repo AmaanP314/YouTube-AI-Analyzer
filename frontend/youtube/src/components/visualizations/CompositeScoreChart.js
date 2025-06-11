@@ -6,7 +6,7 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  LabelList,
+  Cell,
 } from "recharts";
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -23,15 +23,26 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function CompositeScoreChart({ videoData }) {
+const trimTitle = (title, maxLength = 25) => {
+  if (!title) return "";
+  if (title.length > maxLength) {
+    return title.substring(0, maxLength) + "...";
+  }
+  return title;
+};
+
+export default function CompositeScoreChart({
+  videoData,
+  onBarClick,
+  highlightedVideoId,
+}) {
   const chartData = useMemo(() => {
     if (!videoData || videoData.length === 0) return [];
     return videoData
       .map((v) => ({
         ...v,
         compositeScore: Math.round(v.compositeScore || 0),
-        truncatedTitle:
-          v.title.length > 20 ? `${v.title.substring(0, 20)}...` : v.title,
+        truncatedTitle: trimTitle(v.title, 25),
       }))
       .sort((a, b) => b.compositeScore - a.compositeScore);
   }, [videoData]);
@@ -39,56 +50,42 @@ export default function CompositeScoreChart({ videoData }) {
   return (
     <div className="p-3 bg-youtube-dark-secondary rounded-xl mt-4">
       <h3 className="text-sm font-semibold text-youtube-gray-primary mb-4 text-center">
-        Composite Performance Score
+        Video Performance Score
       </h3>
       <ResponsiveContainer width="100%" height={250}>
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            overflowX: "auto",
-            overflowY: "hidden",
+        <BarChart
+          data={chartData}
+          margin={{ top: 0, right: 0, left: -25, bottom: 0 }}
+          onClick={(state) => {
+            if (state && state.activeTooltipIndex !== undefined) {
+              const clickedData = chartData[state.activeTooltipIndex];
+              if (clickedData && onBarClick) {
+                onBarClick(clickedData);
+              }
+            }
           }}
         >
-          <div
-            style={{
-              width: `${Math.max(100, chartData.length * 50)}%`,
-              height: "100%",
-            }}
+          <XAxis
+            dataKey="truncatedTitle"
+            tick={false}
+            axisLine={{ stroke: "#303030" }}
+          />
+          <YAxis tick={{ fontSize: 10, fill: "#aaa" }} />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar
+            dataKey="compositeScore"
+            onClick={onBarClick}
+            cursor="pointer"
+            animationDuration={500}
           >
-            <BarChart
-              data={chartData}
-              margin={{ top: 15, right: 10, left: -20, bottom: 50 }}
-              layout="horizontal"
-            >
-              <XAxis
-                dataKey="truncatedTitle"
-                angle={-45}
-                textAnchor="end"
-                height={60}
-                tick={{ fontSize: 10, fill: "#aaa" }}
-                interval={0}
+            {chartData.map((entry) => (
+              <Cell
+                key={`cell-${entry.id}`}
+                fill={entry.id === highlightedVideoId ? "#60a5fa" : "#3b82f6"}
               />
-              <YAxis tick={{ fontSize: 10, fill: "#aaa" }} />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ fill: "rgba(100,100,100,0.1)" }}
-              />
-              <Bar
-                dataKey="compositeScore"
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-                animationDuration={800}
-              >
-                <LabelList
-                  dataKey="compositeScore"
-                  position="top"
-                  style={{ fill: "#aaa", fontSize: 10 }}
-                />
-              </Bar>
-            </BarChart>
-          </div>
-        </div>
+            ))}
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );
