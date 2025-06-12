@@ -20,7 +20,6 @@ const formatLikes = (likes) => {
   return Math.floor(likes / 1000000) + "M";
 };
 
-// Helper function for formatting subscribers (can be moved to utils)
 const formatSubscribers = (subs) => {
   if (subs === undefined || subs === null || isNaN(subs)) return "N/A";
   if (subs < 1000) return subs.toString();
@@ -50,8 +49,9 @@ export default function VideoDetails({ videoInfo }) {
               <Image
                 src={videoInfo.channelThumbnailUrl}
                 alt={`${videoInfo.channelName || "Channel"} avatar`}
-                layout="fill"
-                objectFit="cover"
+                fill
+                style={{ objectFit: "cover" }}
+                sizes="40px"
                 onError={(e) => {
                   e.target.style.display = "none";
                 }}

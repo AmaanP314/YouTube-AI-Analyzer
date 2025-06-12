@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import ViewsLikesChart from "../components/visualizations/ViewsLikesChart";
 import EngagementRateChart from "../components/visualizations/EngagementRateChart";
 import CompositeScoreChart from "../components/visualizations/CompositeScoreChart";
+import { useAnalysis } from "../context/AnalysisContext";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -100,6 +101,7 @@ const MAX_RESULTS_PER_PAGE = 10;
 export default function ResultsPage() {
   const router = useRouter();
   const { search_query } = router.query;
+  const { mobileView, setMobileView } = useAnalysis();
 
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,6 +215,10 @@ export default function ResultsPage() {
   }, [nextPageToken, isLoadingMore, hasMorePages, router.query.search_query]);
 
   useEffect(() => {
+    setMobileView("main");
+  }, []);
+
+  useEffect(() => {
     if (!router.isReady) return;
     const query = router.query.search_query;
     const storedStateString = sessionStorage.getItem("youtubeLastSearchState");
@@ -275,14 +281,17 @@ export default function ResultsPage() {
   const handleChartClick = (payload) => {
     if (payload && payload.id) {
       const videoRef = videoRefs.current[payload.id];
-      if (videoRef && videoRef.current) {
-        videoRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        setHighlightedVideoId(payload.id);
-        setTimeout(() => setHighlightedVideoId(null), 1500);
-      }
+      setMobileView("main");
+      setTimeout(() => {
+        if (videoRef && videoRef.current) {
+          videoRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          setHighlightedVideoId(payload.id);
+          setTimeout(() => setHighlightedVideoId(null), 2000);
+        }
+      }, 100);
     }
   };
 
@@ -293,7 +302,12 @@ export default function ResultsPage() {
         initialQuery={currentQueryForHeader}
       />
       <main className="w-full px-2 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-6 flex flex-col lg:flex-row gap-6">
-        <div className="w-full lg:flex-grow min-w-0">
+        {/* Left (Main Content) Section */}
+        <div
+          className={`w-full lg:flex-grow min-w-0 ${
+            mobileView !== "main" ? "hidden" : ""
+          } lg:block`}
+        >
           {isLoading && (
             <>
               {" "}
@@ -332,8 +346,11 @@ export default function ResultsPage() {
             )}
           </div>
         </div>
-
-        <div className="w-full lg:w-[360px] xl:w-[402px] flex-shrink-0 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.6))] max-h-[calc(100vh_-_theme(spacing.14)_-_theme(spacing.12))] overflow-y-auto custom-scrollbar flex flex-col gap-4 overflow-x-hidden">
+        {/* Right (Visualization) Section */}
+        <div
+          className={`w-full lg:w-[360px] xl:w-[402px] flex-shrink-0 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.6))] max-h-[calc(100vh_-_theme(spacing.14)_-_theme(spacing.12))] overflow-y-auto custom-scrollbar flex-col gap-4 overflow-x-hidden 
+          ${mobileView === "analysis" ? "flex" : "hidden"} lg:flex`}
+        >
           {searchResults.length > 0 ? (
             <>
               <ViewsLikesChart

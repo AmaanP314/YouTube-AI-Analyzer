@@ -25,12 +25,12 @@ export default function LandingPage() {
         onSearch={handleLandingPageSearch}
         initialQuery={initialHeaderQuery}
       />
-      <main className="flex-grow flex items-center justify-center">
+      <main className="flex-grow flex items-center justify-center px-4 sm:px-0">
         <div className="text-center">
-          <h1 className="text-3xl font-semibold text-youtube-gray-primary mb-4">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-youtube-gray-primary mb-3 sm:mb-4">
             Welcome to YouTube AI Analyzer
           </h1>
-          <p className="text-youtube-gray-secondary">
+          <p className="text-sm sm:text-base text-youtube-gray-secondary">
             Use the search bar above to get started!
           </p>
         </div>

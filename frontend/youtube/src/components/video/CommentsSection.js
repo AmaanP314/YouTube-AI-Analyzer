@@ -175,8 +175,9 @@ function CommentItem({
           <Image
             src={comment.AuthorLogoUrl}
             alt={`${comment.Author || "User"}'s avatar`}
-            layout="fill"
-            objectFit="cover"
+            fill
+            style={{ objectFit: "cover" }}
+            sizes="(max-width: 640px) 32px, 40px"
             onError={(e) => {
               e.target.style.display = "none";
             }}

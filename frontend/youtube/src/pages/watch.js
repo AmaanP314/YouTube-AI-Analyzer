@@ -9,6 +9,7 @@ import SummarySection from "../components/video/SummarySection";
 import QASection from "../components/video/QASection";
 import SentimentDistributionChart from "../components/visualizations/SentimentDistributionChart";
 import SentimentChartSkeleton from "../components/placeholders/SentimentChartSkeleton";
+import { useAnalysis } from "../context/AnalysisContext";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -45,6 +46,7 @@ const stripHtml = (html) => {
 export default function WatchPage() {
   const router = useRouter();
   const { v: videoIdFromQuery } = router.query;
+  const { isAnalysisMode, mobileView, setMobileView } = useAnalysis();
 
   // Video Data State
   const [videoData, setVideoData] = useState(null);
@@ -120,6 +122,10 @@ export default function WatchPage() {
       setIsLoadingVideo(false);
     }
   };
+
+  useEffect(() => {
+    setMobileView("main");
+  }, []);
 
   // Phase 1: Load videoData from sessionStorage or fetch directly
   useEffect(() => {
@@ -207,6 +213,14 @@ export default function WatchPage() {
 
   // Phase 3: Fetch Sentiments, Video Summary, and Comment Summary in parallel
   useEffect(() => {
+    if (!isAnalysisMode) {
+      // Set loading states to false so the UI doesn't hang
+      setIsLoadingSentiments(false);
+      setAreSentimentsReady(true); // Technically ready, just empty.
+      setIsLoadingVideoSummary(false);
+      setIsLoadingCommentSummary(false);
+      return;
+    }
     // Only run if videoData.id is available AND comments fetching has completed (successfully or not)
     if (!videoData?.id || !hasCommentsFetchedInitially) {
       return;
@@ -327,7 +341,7 @@ export default function WatchPage() {
       videoSummaryPromise,
       commentSummaryPromise,
     ]);
-  }, [videoData?.id, hasCommentsFetchedInitially]); // Dependency on hasCommentsFetchedInitially
+  }, [videoData?.id, hasCommentsFetchedInitially, isAnalysisMode]); // Dependency on hasCommentsFetchedInitially
 
   const displayVideoData = useMemo(() => {
     if (!videoData) return null;
@@ -449,7 +463,11 @@ export default function WatchPage() {
       />
       <main className="w-full px-2 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-6 flex flex-col lg:flex-row gap-6 flex-grow">
         {/* Left Column */}
-        <div className="w-full lg:flex-grow min-w-0">
+        <div
+          className={`w-full lg:flex-grow min-w-0 ${
+            mobileView !== "main" ? "hidden" : ""
+          } lg:block`}
+        >
           <VideoPlayer videoId={displayVideoData.id} />
           <VideoDetails videoInfo={displayVideoData} />
           <DescriptionBox
@@ -467,42 +485,47 @@ export default function WatchPage() {
           />
         </div>
 
-        {/* Right Column (layout remains same) */}
-        <div className="w-full lg:w-[360px] xl:w-[402px] flex-shrink-0 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.6))] max-h-[calc(100vh_-_theme(spacing.14)_-_theme(spacing.12))] overflow-y-auto custom-scrollbar flex flex-col gap-4">
-          <div className="flex-shrink-0">
-            <SummarySection
-              activeContext={activeSummaryContext}
-              setActiveContext={setActiveSummaryContext}
-              videoSummary={videoSummary}
-              commentSummary={commentSummary}
-              isLoadingVideoSummary={isLoadingVideoSummary}
-              isLoadingCommentSummary={isLoadingCommentSummary}
-              errorVideoSummary={errorVideoSummary}
-              errorCommentSummary={errorCommentSummary}
-            />
-          </div>
-          <div className="flex-shrink-0 bg-youtube-dark-secondary rounded-xl p-3">
-            <QASection
-              videoId={displayVideoData.id}
-              activeContext={activeSummaryContext}
-              isEnabled={isQAEnabled}
-            />
-          </div>
-          {!isLoadingComments &&
-          areSentimentsReady &&
-          commentsWithSentiments.length > 0 &&
-          !errorSentiments ? (
+        {/* Right Column */}
+        {isAnalysisMode && (
+          <div
+            className={`w-full lg:w-[360px] xl:w-[402px] flex-shrink-0 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.6))] max-h-[calc(100vh_-_theme(spacing.14)_-_theme(spacing.12))] overflow-y-auto custom-scrollbar flex-col gap-4 
+            ${mobileView === "analysis" ? "flex" : "hidden"} lg:flex`}
+          >
             <div className="flex-shrink-0">
-              <SentimentDistributionChart
-                sentiments={commentsWithSentiments
-                  .map((c) => c.sentiment)
-                  .filter((s) => s !== null)}
+              <SummarySection
+                activeContext={activeSummaryContext}
+                setActiveContext={setActiveSummaryContext}
+                videoSummary={videoSummary}
+                commentSummary={commentSummary}
+                isLoadingVideoSummary={isLoadingVideoSummary}
+                isLoadingCommentSummary={isLoadingCommentSummary}
+                errorVideoSummary={errorVideoSummary}
+                errorCommentSummary={errorCommentSummary}
               />
             </div>
-          ) : !isLoadingComments && isLoadingSentiments ? (
-            <SentimentChartSkeleton />
-          ) : null}
-        </div>
+            <div className="flex-shrink-0 bg-youtube-dark-secondary rounded-xl p-3 mt-4">
+              <QASection
+                videoId={displayVideoData.id}
+                activeContext={activeSummaryContext}
+                isEnabled={isQAEnabled}
+              />
+            </div>
+            {!isLoadingComments &&
+            areSentimentsReady &&
+            commentsWithSentiments.length > 0 &&
+            !errorSentiments ? (
+              <div className="flex-shrink-0 mt-4">
+                <SentimentDistributionChart
+                  sentiments={commentsWithSentiments
+                    .map((c) => c.sentiment)
+                    .filter((s) => s !== null)}
+                />
+              </div>
+            ) : !isLoadingComments && isLoadingSentiments ? (
+              <SentimentChartSkeleton />
+            ) : null}
+          </div>
+        )}
       </main>
     </div>
   );

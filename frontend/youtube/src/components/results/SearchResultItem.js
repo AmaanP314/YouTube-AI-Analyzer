@@ -1,7 +1,6 @@
 import React, { forwardRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { MoreVertical } from "lucide-react";
 
 const formatViews = (views) => {
   if (!views || isNaN(views)) return "N/A views";
@@ -44,8 +43,9 @@ const SearchResultItem = forwardRef(
             <Image
               src={video.thumbnailUrl}
               alt={`Thumbnail for ${video.title}`}
-              layout="fill"
-              objectFit="cover"
+              fill
+              style={{ objectFit: "cover" }}
+              sizes="(max-width: 640px) 100vw, 360px"
               className="rounded-lg"
             />
           ) : (
@@ -75,8 +75,9 @@ const SearchResultItem = forwardRef(
                 <Image
                   src={video.channelThumbnailUrl}
                   alt={`${video.channelName || "Channel"} avatar`}
-                  layout="fill"
-                  objectFit="cover"
+                  fill
+                  style={{ objectFit: "cover" }}
+                  sizes="24px"
                 />
               ) : (
                 <div className="w-full h-full bg-youtube-dark-tertiary"></div>
@@ -92,16 +93,6 @@ const SearchResultItem = forwardRef(
               : video.description || "No description available."}
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log("More options");
-          }}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded-full self-start"
-        >
-          <MoreVertical size={20} />
-        </button>
       </a>
     );
   }
