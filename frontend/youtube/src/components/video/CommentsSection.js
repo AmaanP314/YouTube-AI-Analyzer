@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from "react";
-import Image from "next/image";
 import {
   ThumbsUp,
   ThumbsDown,
@@ -172,14 +171,12 @@ function CommentItem({
     <div className="flex items-start gap-3 py-3">
       <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 overflow-hidden relative bg-youtube-dark-secondary">
         {comment.AuthorLogoUrl ? (
-          <Image
+          <img
             src={comment.AuthorLogoUrl}
             alt={`${comment.Author || "User"}'s avatar`}
-            fill
-            style={{ objectFit: "cover" }}
-            sizes="(max-width: 640px) 32px, 40px"
+            className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => {
-              e.target.style.display = "none";
+              e.currentTarget.style.display = "none";
             }}
           />
         ) : (

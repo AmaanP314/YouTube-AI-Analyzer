@@ -6,30 +6,33 @@ from langchain.schema import Document
 from langchain.chains import RetrievalQA
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
-import time
-import json
 import requests
 import xml.etree.ElementTree as ET
 import os
+
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite-001", google_api_key=GOOGLE_API_KEY, max_output_tokens=4096)
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite-001", google_api_key=GOOGLE_API_KEY)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
 
 video_cache = {}
 
-def parse_subtitle_content(subtitle_content, ext):
-  root = ET.fromstring(subtitle_content)
-  transcript = []
-  for elem in root.findall('text'):
-      start = float(elem.attrib['start'])
-      dur = float(elem.attrib.get('dur', 0))
-      text = elem.text or ''
-      transcript.append({
-          'start': start,
-          'duration': dur,
-          'text': text.replace('\n', ' ')
-    })
-  return transcript
+def parse_subtitle_content(subtitle_content):
+    try:
+        root = ET.fromstring(subtitle_content)
+        transcript = []
+        for elem in root.findall('text'):
+            start = float(elem.attrib['start'])
+            dur = float(elem.attrib.get('dur', 0))
+            text = elem.text or ''
+            transcript.append({
+                'start': start,
+                'duration': dur,
+                'text': text.replace('\n', ' ')
+            })
+        return transcript
+    except Exception as e:
+        print(f"Error parsing subtitle content: {e}")
+        return []
 
 def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -101,7 +104,7 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
                     response = requests.get(best_transcript_url, stream=True)
                     response.raise_for_status()
                     subtitle_content = response.text
-                    return parse_subtitle_content(subtitle_content, best_transcript_ext)
+                    return parse_subtitle_content(subtitle_content)
                 except requests.exceptions.RequestException as e:
                     print(f"Error fetching subtitle content from URL {best_transcript_url}: {e}")
                     return []
@@ -228,26 +231,6 @@ def get_transcript(video_id):
         print(f"Unexpected error fetching transcript: {e}")
         return ''
 
-def get_clean_transcript(video_id):
-    """Get transcript without timestamps for better processing."""
-    # Check if clean transcript is already cached
-    if video_id in video_cache and "CleanTranscript" in video_cache[video_id]:
-        print(f"Using cached clean transcript for video ID: {video_id}")
-        return video_cache[video_id]["CleanTranscript"]
-    
-    # Get the full transcript (will use cache if available)
-    full_transcript = get_transcript(video_id)
-    if not full_transcript:
-        return ''
-    
-    # Remove timestamps to get clean text
-    clean_transcript = re.sub(r'\[\d{2}:\d{2}:\d{2}\]', '', full_transcript)
-    clean_transcript = re.sub(r'\s+', ' ', clean_transcript).strip()
-    
-    # Cache the clean transcript
-    video_cache[video_id]["CleanTranscript"] = clean_transcript
-    return clean_transcript
-
 def chunk_transcript(transcript, chunk_size=1000, overlap=200):
     """Split transcript into overlapping chunks for better context preservation."""
     if not transcript:
@@ -269,11 +252,13 @@ def chunk_transcript(transcript, chunk_size=1000, overlap=200):
 
 
 summary_prompt = PromptTemplate(
-    input_variables=["text"],
+    input_variables=["text", "title", "channel_name"],
     template="""
 IMPORTANT: Keep your entire response under 1000 tokens. Be concise. Focus on essential insights. Avoid over-explaining or repeating.
 
 You are a helpful and critical-thinking assistant tasked with analyzing and summarizing YouTube video content.
+
+You are summarizing a video titled: "{title}", published by the channel: "{channel_name}".
 
 The input is a transcript of the video formatted as a continuous string. Each sentence is preceded by a timestamp in the format [hh:mm:ss], followed by the spoken text. The entire transcript is space-separated without line breaks.
 
@@ -288,11 +273,11 @@ Your task is to:
 3. **Fact Check**: Evaluate the factual accuracy of claims made by the speaker. For each claim that makes a factual assertion (e.g., dates, statistics, scientific or historical facts), verify if it is true or potentially misleading. Flag inaccuracies or unsupported claims with a note, and provide a short explanation or correction when appropriate.
 
 Return your output in this format:
-- **Summary**: ...
-- **Main Points Covered**: ...
-- **Fact Check Notes**:
-  - [hh:mm:ss] Claim: "..." → ✅ True / ❌ False / ⚠️ Unverifiable
-    - Explanation: ...
+**Summary**: ...
+**Main Points Covered**: ...
+**Fact Check Notes**:
+  - [hh:mm:ss] Claim: "..." → ✅ True / ❌ False
+  - Explanation: ...
 
 **Transcript**:
 {text}
@@ -342,17 +327,16 @@ def ensure_processed_transcript(video_id):
     if "TranscriptChunks" in video_cache[video_id]:
         return video_cache[video_id]["TranscriptChunks"]
     
-    # Get clean transcript (will use cache if available)
-    clean_transcript = get_clean_transcript(video_id)
-    if not clean_transcript:
+    transcript = get_transcript(video_id)
+    if not transcript:
         return []
     
     # Create and cache transcript chunks
-    chunks = chunk_transcript(clean_transcript)
+    chunks = chunk_transcript(transcript)
     video_cache[video_id]["TranscriptChunks"] = chunks
     return chunks
 
-async def summarize_video(video_id):
+async def summarize_video(video_id,  title, channel_name):
     """Summarize video transcript with caching."""
     # Check if summary is already cached
     if video_id in video_cache and "Summary" in video_cache[video_id]:
@@ -365,7 +349,6 @@ async def summarize_video(video_id):
         return {"error": "No transcript found or unable to fetch transcript."}
     
     try:
-        
         # Create document from transcript
         transcript_docs = Document(page_content=transcript)
         summary_chain = load_summarize_chain(
@@ -373,7 +356,12 @@ async def summarize_video(video_id):
             chain_type="stuff",
             prompt=summary_prompt
         )
-        response = summary_chain.invoke([transcript_docs])
+
+        response = summary_chain.invoke({
+            "input_documents": [transcript_docs],
+            "title": title,
+            "channel_name": channel_name
+        })
         summary = response['output_text'].strip()
         if not summary:
             return {"error": "Summary generation failed or returned empty."}
@@ -453,7 +441,6 @@ def get_video_cache_stats():
     for video_id, data in video_cache.items():
         stats[video_id] = {
             "has_transcript": "Transcript" in data,
-            "has_clean_transcript": "CleanTranscript" in data,
             "has_transcript_chunks": "TranscriptChunks" in data,
             "has_summary": "Summary" in data,
             "has_vectorstore": "Vectorstore" in data,

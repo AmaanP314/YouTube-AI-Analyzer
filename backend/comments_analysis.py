@@ -16,7 +16,7 @@ API_KEY_VIDEO = os.getenv('API_KEY_VIDEO')
 BASE_URL = "https://www.googleapis.com/youtube/v3"
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-embed_model = "models/text-embedding-004"
+embed_model = "models/embedding-001"
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash-lite",
@@ -164,12 +164,12 @@ def format_comment(comment):
     return f"{comment['Author']}: {comment['CommentText']} (Likes: {comment['LikeCount']})"
 
 custom_prompt = PromptTemplate(
-    input_variables=["text"],
+    input_variables=["text", "title", "channel_name"],
     template="""
 IMPORTANT: Keep your entire response under 1000 tokens. Be concise. Focus on essential insights. Avoid over-explaining or repeating.
 
 You are a critical and insightful assistant summarizing YouTube comments.
-
+You are summarizing the comment section of a video titled: "{title}", published by the channel: "{channel_name}".
 Your tasks are to:
 1. **Summarize**: Identify and summarize the main opinions, reactions, and themes across the comments. 
 2. **Highlight**: Highlight praise, criticism, and any notable disagreements or debates.
@@ -181,12 +181,12 @@ Your tasks are to:
 
 Return your output in this format:
 
-- **Summary of Opinions**: ...
-- **Common Themes & Sentiments**: ...
-- **Notable or Unique Comments**: ...
-- **Fact Check Notes**:
-  - @username: "Comment content or claim..." → ✅ True / ❌ False / ⚠️ Unverifiable
-    - Explanation: ...
+**Summary of Opinions**: ...
+**Common Themes & Sentiments**: ...
+**Notable or Unique Comments**: ...
+**Fact Check Notes**:
+  - @username: "Comment content or claim..." → ✅ True / ❌ False
+   - Explanation: Only if a comment is False
 
 Comments are shown below, with author names starting with @:
 {text}
@@ -258,7 +258,7 @@ def ensure_processed_comments(video_id):
     cache[video_id]["ProcessedComments"] = cleaned_comments
     return cleaned_comments
 
-async def summarize_comments(video_id):
+async def summarize_comments(video_id, title, channel_name):
     # Check if summary is already cached
     if video_id in cache and "Summary" in cache[video_id]:
         print(f"Using cached summary for video ID: {video_id}")
@@ -285,7 +285,11 @@ async def summarize_comments(video_id):
         prompt=custom_prompt
     )
     
-    response = summary_chain.invoke([all_comments_docs])
+    response = summary_chain.invoke({
+            "input_documents": [all_comments_docs],
+            "title": title,
+            "channel_name": channel_name
+        })
     summary = response['output_text'].strip()
     if not summary:
         return {"error": "Comment Summary generation failed or returned empty."}

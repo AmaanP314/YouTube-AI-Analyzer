@@ -1,5 +1,4 @@
 import React, { forwardRef } from "react";
-import Image from "next/image";
 import { useRouter } from "next/router";
 
 const formatViews = (views) => {
@@ -40,13 +39,10 @@ const SearchResultItem = forwardRef(
       >
         <div className="relative flex-shrink-0 w-full sm:w-[360px] h-[202px]">
           {video.thumbnailUrl ? (
-            <Image
+            <img
               src={video.thumbnailUrl}
               alt={`Thumbnail for ${video.title}`}
-              fill
-              style={{ objectFit: "cover" }}
-              sizes="(max-width: 640px) 100vw, 360px"
-              className="rounded-lg"
+              className="absolute inset-0 w-full h-full object-cover rounded-lg"
             />
           ) : (
             <div className="absolute inset-0 bg-youtube-dark-secondary rounded-lg animate-pulse"></div>
@@ -72,12 +68,10 @@ const SearchResultItem = forwardRef(
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 rounded-full flex-shrink-0 overflow-hidden relative bg-youtube-dark-secondary">
               {video.channelThumbnailUrl ? (
-                <Image
+                <img
                   src={video.channelThumbnailUrl}
                   alt={`${video.channelName || "Channel"} avatar`}
-                  fill
-                  style={{ objectFit: "cover" }}
-                  sizes="24px"
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-youtube-dark-tertiary"></div>

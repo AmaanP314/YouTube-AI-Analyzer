@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 from youtube_search import search_youtube, get_sentiments, search_video
-from comment_QA import extract_comments, summarize_comments, answer_question, get_cache_stats
-from video_QA import get_transcript, summarize_video, answer_video_question, get_transcript_preview, get_video_cache_stats
+from comments_analysis import extract_comments, summarize_comments, answer_question, get_cache_stats
+from video_analysis import get_transcript, summarize_video, answer_video_question, get_transcript_preview, get_video_cache_stats
 app = FastAPI()
 
 origins = [
@@ -110,10 +110,14 @@ async def comments_sentiments(input_data: CommentsInput):
     description="Summarizes the comments of a YouTube video by its ID. Uses caching for improved performance.",
     tags=["Comments"]
 )
-async def comment_summary(video_id: str):
+async def comment_summary(
+    video_id: str,
+    title: str = Query(default="", description="Title of the YouTube video"),
+    channel_name: str = Query(default="", description="Name of the YouTube channel")
+):
     """Generate a summary of YouTube video comments."""
     try:
-        summary = await summarize_comments(video_id)
+        summary = await summarize_comments(video_id, title, channel_name)
         if isinstance(summary, dict) and "error" in summary:
             return JSONResponse(
                 status_code=404,
@@ -182,10 +186,14 @@ def get_video_transcript(video_id: str):
     description="Summarizes the content of a YouTube video based on its transcript. Uses caching for improved performance.",
     tags=["Video"]
 )
-async def video_summary(video_id: str):
+async def video_summary(
+    video_id: str,
+    title: str = Query(default="", description="Title of the YouTube video"),
+    channel_name: str = Query(default="", description="Name of the YouTube channel")
+):
     """Generate a summary of YouTube video content."""
     try:
-        summary = await summarize_video(video_id)
+        summary = await summarize_video(video_id, title=title, channel_name=channel_name)
         if isinstance(summary, dict) and "error" in summary:
             return JSONResponse(
                 status_code=404,

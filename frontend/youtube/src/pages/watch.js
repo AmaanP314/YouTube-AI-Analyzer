@@ -284,7 +284,12 @@ export default function WatchPage() {
 
     const videoSummaryPromise = (async () => {
       try {
-        const videoRes = await fetch(`${apiUrl}/video/summarize/${videoId}`);
+        const title = encodeURIComponent(videoData.title.trim());
+        const channelName = encodeURIComponent(videoData.channelName.trim());
+
+        const videoRes = await fetch(
+          `${apiUrl}/video/summarize/${videoId}?title=${title}&channel_name=${channelName}`
+        );
         if (!videoRes.ok) {
           const errorData = await videoRes
             .json()
@@ -313,8 +318,10 @@ export default function WatchPage() {
         return;
       }
       try {
+        const title = encodeURIComponent(videoData.title.trim());
+        const channelName = encodeURIComponent(videoData.channelName.trim());
         const commentRes = await fetch(
-          `${apiUrl}/comments/summarize/${videoId}`
+          `${apiUrl}/comments/summarize/${videoId}?title=${title}&channel_name=${channelName}`
         );
         if (!commentRes.ok) {
           const errorData = await commentRes

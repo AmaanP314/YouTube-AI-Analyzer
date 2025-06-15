@@ -1,5 +1,4 @@
 import React from "react";
-import Image from "next/image";
 import {
   CheckCircle,
   ThumbsUp,
@@ -46,14 +45,12 @@ export default function VideoDetails({ videoInfo }) {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden relative bg-youtube-dark-secondary">
             {videoInfo.channelThumbnailUrl ? (
-              <Image
+              <img
                 src={videoInfo.channelThumbnailUrl}
                 alt={`${videoInfo.channelName || "Channel"} avatar`}
-                fill
-                style={{ objectFit: "cover" }}
-                sizes="40px"
+                className="absolute inset-0 w-full h-full object-cover"
                 onError={(e) => {
-                  e.target.style.display = "none";
+                  e.currentTarget.style.display = "none";
                 }}
               />
             ) : (
