@@ -1,7 +1,7 @@
 import re
 import yt_dlp
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.chains import RetrievalQA
 from langchain.chains.summarize import load_summarize_chain
@@ -9,12 +9,14 @@ from langchain.prompts import PromptTemplate
 import requests
 import xml.etree.ElementTree as ET
 import os
+from sqlalchemy.orm import Session
+from ..db import crud
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite-001", google_api_key=GOOGLE_API_KEY)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
 
-video_cache = {}
+local_cache = {}
 
 def parse_subtitle_content(subtitle_content):
     try:
@@ -34,8 +36,12 @@ def parse_subtitle_content(subtitle_content):
         print(f"Error parsing subtitle content: {e}")
         return []
 
+# Most reliable method to extract YouTube video transcripts when running locally.
+# Transcripts are almost always retrievable if available.
+# Note: This method may not work reliably on remote servers, as YouTube often blocks data center IP addresses.
 def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+    # yt-dlp configuration to only extract subtitles, not download video
     ydl_opts = {
         'skip_download': True,
         'writesubtitles': True,
@@ -47,17 +53,21 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
     }
 
     try:
+        # Use yt-dlp to extract video metadata and available subtitles
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(youtube_url, download=False)
-            
+
+            # Collect all caption tracks from both manual and auto subtitles
             all_caption_tracks = {}
 
+            # Add manually provided subtitles to the caption track list
             if 'subtitles' in info_dict:
                 for lang, tracks in info_dict['subtitles'].items():
                     if lang not in all_caption_tracks:
                         all_caption_tracks[lang] = []
                     all_caption_tracks[lang].extend(tracks)
             
+            # Add auto-generated captions to the caption track list
             if 'automatic_captions' in info_dict:
                 for lang, tracks in info_dict['automatic_captions'].items():
                     if lang not in all_caption_tracks:
@@ -67,6 +77,7 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
             best_transcript_url = None
             best_transcript_ext = None
 
+            # Helper: Return the first track with a non-JSON file format
             def find_first_non_json_track(tracks):
                 for track in tracks:
                     ext = track.get('ext')
@@ -74,7 +85,7 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
                         return track
                 return None # No suitable non-json track found
 
-            # 1. Try preferred languages first
+            # Step 1: Try to find a track in preferred languages
             for p_lang in preferred_langs:
                 if p_lang in all_caption_tracks:
                     best_track = find_first_non_json_track(all_caption_tracks[p_lang])
@@ -82,11 +93,11 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
                         best_transcript_url = best_track['url']
                         best_transcript_ext = best_track['ext']
                         print(f"Found preferred language '{p_lang}' track with extension '{best_transcript_ext}'.")
-                        break
+                        break # Stop searching once we find a match
                 if best_transcript_url:
-                    break
+                    break # Already found a usable track
             
-            # 2. If no suitable track found in preferred languages, try any other available language
+            # Step 2: If no match in preferred languages, fallback to any other available language
             if not best_transcript_url:
                 for lang, tracks in all_caption_tracks.items():
                     if 'live_chat' in lang or lang in preferred_langs: 
@@ -97,14 +108,15 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
                         best_transcript_ext = best_track['ext']
                         print(f"Found any language '{lang}' track with extension '{best_transcript_ext}'.")
                         break
-
+            
+            # If a valid transcript URL and extension are found, fetch and parse
             if best_transcript_url and best_transcript_ext:
                 try:
                     print(f"Attempting to download transcript from: {best_transcript_url}")
                     response = requests.get(best_transcript_url, stream=True)
                     response.raise_for_status()
-                    subtitle_content = response.text
-                    return parse_subtitle_content(subtitle_content)
+                    subtitle_content = response.text # Raw subtitle XML
+                    return parse_subtitle_content(subtitle_content) # Convert XML to structured transcript
                 except requests.exceptions.RequestException as e:
                     print(f"Error fetching subtitle content from URL {best_transcript_url}: {e}")
                     return []
@@ -124,90 +136,19 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
         print(f"An unexpected error occurred during yt-dlp extraction: {e}")
         return []
 
-# Manual Approach to fetch YouTube video transcripts
-# def fetch_transcript(video_id, max_retries=6, retry_delay=2):
-#     # optionally use headers to mimic a browser request
-#     headers = {
-#         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-#     }
-
-#     for attempt in range(1, max_retries + 1):
-#         try:
-#             url = f'https://www.youtube.com/watch?v={video_id}'
-#             resp = requests.get(url, headers=headers)
-#             html = resp.text
-
-#             # Extract ytInitialPlayerResponse JSON
-#             initial_data = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
-#             # print("initial data: ",initial_data)
-#             if not initial_data:
-#                 print(f"Attempt {attempt}: Could not find ytInitialPlayerResponse for video ID: {video_id}")
-#                 continue  # retry if response was malformed
-
-#             data = json.loads(initial_data.group(1))
-#             captions = data.get('captions')
-#             print(captions)
-#             if not captions:
-#                 print(f"No captions available for video ID: {video_id}")
-#                 return ""  # final condition
-
-#             tracks = captions['playerCaptionsTracklistRenderer'].get('captionTracks', [])
-#             if not tracks:
-#                 print(f"No caption tracks available for video ID: {video_id}")
-#                 return ""  # final condition
-#             # transcript_url = tracks[0]['baseUrl']
-#             # transcript_xml = requests.get(transcript_url).text
-#             transcript_xml = ''
-#             for track in tracks:
-#                 transcript_url = track['baseUrl']
-#                 response = requests.get(transcript_url, headers=headers)
-#                 print("response: ", response.text)
-#                 if response.status_code == 200 and response.text.strip():
-#                     transcript_xml = response.text
-#                     break
-
-#             if not transcript_xml:
-#                 print(f"Attempt {attempt}: No valid transcript XML found for video ID: {video_id}")
-#                 continue  # retry if transcript didn't load
-
-#             # Parse and build transcript string
-#             root = ET.fromstring(transcript_xml)
-#             # transcript_lines = []
-#             # for elem in root.findall('text'):
-#             #     text = elem.text or ''
-#             #     transcript_lines.append(text.replace('\n', ' '))
-#             transcript = []
-#             for elem in root.findall('text'):
-#                 start = float(elem.attrib['start'])
-#                 dur = float(elem.attrib.get('dur', 0))
-#                 text = elem.text or ''
-#                 transcript.append({
-#                     'start': start,
-#                     'duration': dur,
-#                     'text': text.replace('\n', ' ')
-#                 })
-
-#             # return ' '.join(transcript_lines).strip()
-#             print(f"Transcript fetched successfully for video ID: {video_id} on attempt {attempt}")
-#             return transcript
-
-#         except Exception as e:
-#             print(f"Error fetching transcript for video ID {video_id} on attempt {attempt}: {e}")
-#             time.sleep(retry_delay * attempt)
-
-def get_transcript(video_id):
-    """Fetch and cache video transcript with timestamps."""
-    # Check if transcript is already cached
-    if video_id in video_cache and "Transcript" in video_cache[video_id]:
+def get_transcript(db: Session, video_id: str) -> str:
+    """Fetch transcript from DB cache or from source, then cache it."""
+    cached_video = crud.get_or_create_video_store(db, video_id)
+    if cached_video and cached_video.transcript:
         print(f"Using cached transcript for video ID: {video_id}")
-        return video_cache[video_id]["Transcript"]
-    
+        return cached_video.transcript
+
+    print(f"Fetching transcript from source for video ID: {video_id}")
     try:
         captions = fetch_transcript(video_id)
         if not captions:
-            print(f"No transcript found for video ID: {video_id}")
-            return ''
-        # print(caption)
+            raise ValueError(f"No transcript available for video ID: {video_id}")
+
         formatted_lines = []
         for snippet in captions:
             total_seconds = int(snippet['start'])
@@ -219,17 +160,16 @@ def get_transcript(video_id):
             formatted_lines.append(formatted_line)
         
         full_transcript = " ".join(formatted_lines)
-        
-        # Initialize cache structure for this video
-        if video_id not in video_cache:
-            video_cache[video_id] = {}
-        video_cache[video_id]["Transcript"] = full_transcript
-        
+
+        crud.update_transcript(db, video_id=video_id, transcript=full_transcript)
         return full_transcript
-        
+    except ValueError as ve:
+        # Re-raise the ValueError indicating no transcript
+        raise ve
     except Exception as e:
-        print(f"Unexpected error fetching transcript: {e}")
-        return ''
+        # Catch any other unexpected errors during transcript fetching/processing
+        print(f"An unexpected error occurred while fetching/processing transcript for {video_id}: {e}")
+        raise RuntimeError(f"Failed to retrieve transcript due to an internal issue: {str(e)}")
 
 def chunk_transcript(transcript, chunk_size=1000, overlap=200):
     """Split transcript into overlapping chunks for better context preservation."""
@@ -318,45 +258,41 @@ Answer:
     return qa_prompt
 
 
-def ensure_processed_transcript(video_id):
+def ensure_processed_transcript(db: Session, video_id: str):
     """Ensure transcript chunks are processed and cached for a video."""
-    if video_id not in video_cache:
-        video_cache[video_id] = {}
+    if video_id not in local_cache:
+        local_cache[video_id] = {}
     
     # Check if processed chunks are already cached
-    if "TranscriptChunks" in video_cache[video_id]:
-        return video_cache[video_id]["TranscriptChunks"]
-    
-    transcript = get_transcript(video_id)
-    if not transcript:
-        return []
-    
-    # Create and cache transcript chunks
-    chunks = chunk_transcript(transcript)
-    video_cache[video_id]["TranscriptChunks"] = chunks
-    return chunks
-
-async def summarize_video(video_id,  title, channel_name):
-    """Summarize video transcript with caching."""
-    # Check if summary is already cached
-    if video_id in video_cache and "Summary" in video_cache[video_id]:
-        print(f"Using cached video summary for video ID: {video_id}")
-        return video_cache[video_id]["Summary"]
-    
-    # Get transcript (will use cache if available)
-    transcript = get_transcript(video_id)
-    if not transcript:
-        return {"error": "No transcript found or unable to fetch transcript."}
+    if "TranscriptChunks" in local_cache[video_id]:
+        return local_cache[video_id]["TranscriptChunks"]
     
     try:
-        # Create document from transcript
-        transcript_docs = Document(page_content=transcript)
-        summary_chain = load_summarize_chain(
-            llm=llm,
-            chain_type="stuff",
-            prompt=summary_prompt
-        )
+        transcript = get_transcript(db, video_id)
+        chunks = chunk_transcript(transcript)
+        if not chunks:
+            raise ValueError("No valid transcript chunks could be created for the video.")
+        local_cache[video_id]["TranscriptChunks"] = chunks
+        return chunks
+    except ValueError as ve:
+        raise ve
+    except Exception as e:
+        print(f"An unexpected error occurred during transcript chunk processing for {video_id}: {e}")
+        raise RuntimeError(f"Failed to process transcript chunks due to an internal issue: {str(e)}")
 
+async def summarize_video(db: Session, video_id: str, title: str='', channel_name: str=''):
+    """Summarize video transcript, using DB for caching."""
+    cached_video = crud.get_or_create_video_store(db, video_id)
+    if cached_video and cached_video.video_summary:
+        print(f"Using cached video summary for video ID: {video_id}")
+        return cached_video.video_summary
+    try:
+        transcript = get_transcript(db, video_id)
+        if not transcript:
+            raise ValueError("Transcript not found, cannot summarize.")
+        
+        transcript_docs = Document(page_content=transcript)
+        summary_chain = load_summarize_chain(llm=llm, chain_type="stuff", prompt=summary_prompt)
         response = summary_chain.invoke({
             "input_documents": [transcript_docs],
             "title": title,
@@ -364,128 +300,55 @@ async def summarize_video(video_id,  title, channel_name):
         })
         summary = response['output_text'].strip()
         if not summary:
-            return {"error": "Summary generation failed or returned empty."}
-        # Cache the summary
-        if video_id not in video_cache:
-            video_cache[video_id] = {}
-        video_cache[video_id]["Summary"] = summary
+            raise ValueError("LLM returned an empty summary for the video.")
+        # Cache the summary in the database
+        crud.update_video_summary(db, video_id=video_id, summary=summary)
         
         return summary
-        
+    except ValueError as ve:
+        # Re-raise ValueErrors that indicate business logic failures (like no transcript or empty summary)
+        raise ve
     except Exception as e:
-        print(f"Error creating video summary: {e}")
-        return {"error": f"Error creating summary: {str(e)}"}
+        # Catch any other unexpected errors during the summarization process (e.g., LLM issues)
+        print(f"Error creating video summary for {video_id}: {e}")
+        raise RuntimeError(f"Error creating summary: {str(e)}")
 
-async def answer_video_question(video_id, question):
-    """Answer questions about video content using transcript and summary."""
-    # Ensure we have summary (will create if not cached)
-    if video_id not in video_cache or "Summary" not in video_cache[video_id]:
-        summary = await summarize_video(video_id)
-        if isinstance(summary, dict) and "error" in summary:
-            return summary
-    else:
-        print(f"Using cached video summary for video ID: {video_id}")
-        summary = video_cache[video_id]["Summary"]
-    
-    # Get processed transcript chunks (will process if not cached)
-    chunks = ensure_processed_transcript(video_id)
-    if not chunks:
-        return {"error": "No transcript chunks found after processing."}
-    
-    # Check if vectorstore is already cached
-    if "Vectorstore" not in video_cache[video_id]:
-        print(f"Creating and caching vectorstore for video ID: {video_id}")
-        try:
-            vectorstore = FAISS.from_documents(chunks, embeddings)
-            video_cache[video_id]["Vectorstore"] = vectorstore
-        except Exception as e:
-            return {"error": f"Error creating vectorstore: {str(e)}"}
-    else:
-        print(f"Using cached vectorstore for video ID: {video_id}")
-        vectorstore = video_cache[video_id]["Vectorstore"]
-    
+async def answer_video_question(db: Session, video_id: str, question: str):
     try:
-        # Create QA chain
+        """Answer questions about video content using transcript and summary from DB."""
+        summary = await summarize_video(db, video_id)
+        chunks = ensure_processed_transcript(db, video_id)
+        if not chunks:
+            raise ValueError("No transcript chunks available to answer the question after processing.")
+    
+        # Check if vectorstore is already cached
+        if "Vectorstore" not in local_cache.get(video_id, {}):
+            print(f"Creating and caching vectorstore for video ID: {video_id}")
+            try:
+                vectorstore = FAISS.from_documents(chunks, embeddings)
+                local_cache.setdefault(video_id, {})["Vectorstore"] = vectorstore
+            except Exception as e:
+                print(f"Error creating vectorstore for video ID {video_id}: {e}")
+                raise RuntimeError(f"Error creating vectorstore: {str(e)}")
+        else:
+            print(f"Using cached vectorstore for video ID: {video_id}")
+            vectorstore = local_cache[video_id]["Vectorstore"]
+            
         qa_prompt = get_video_qa_prompt(summary)
-        retriever = vectorstore.as_retriever(search_type="similarity", k=4)
+        retriever = vectorstore.as_retriever()
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             retriever=retriever,
             chain_type="stuff",
-            return_source_documents=True,
             chain_type_kwargs={"prompt": qa_prompt},
         )
-
-        answer = qa_chain(question)
+        answer = qa_chain.invoke(question)
         return answer['result']
-        
+    except (ValueError, RuntimeError) as e:
+        # Re-raise specific exceptions from sub-functions (summarize_video, ensure_processed_transcript, vectorstore creation)
+        raise e 
     except Exception as e:
-        print(f"Error answering question: {e}")
-        return {"error": f"Error processing question: {str(e)}"}
-
-# Utility functions for cache management
-def clear_video_cache(video_id=None):
-    """Clear cache for a specific video or all videos."""
-    global video_cache
-    if video_id:
-        if video_id in video_cache:
-            del video_cache[video_id]
-            print(f"Video cache cleared for video ID: {video_id}")
-    else:
-        video_cache.clear()
-        print("All video cache cleared")
-
-def get_video_cache_stats():
-    """Get statistics about what's cached for videos."""
-    stats = {}
-    for video_id, data in video_cache.items():
-        stats[video_id] = {
-            "has_transcript": "Transcript" in data,
-            "has_transcript_chunks": "TranscriptChunks" in data,
-            "has_summary": "Summary" in data,
-            "has_vectorstore": "Vectorstore" in data,
-            "transcript_length": len(data.get("Transcript", "")),
-            "clean_transcript_length": len(data.get("CleanTranscript", "")),
-            "chunk_count": len(data.get("TranscriptChunks", []))
-        }
-    return stats
-
-def get_transcript_preview(video_id, max_chars=500):
-    """Get a preview of the transcript for debugging."""
-    if video_id in video_cache and "Transcript" in video_cache[video_id]:
-        transcript = video_cache[video_id]["Transcript"]
-        if len(transcript) > max_chars:
-            return transcript[:max_chars] + "..."
-        return transcript
-    return "No transcript found in cache"
-
-# Advanced utility: Get transcript segments by time range
-def get_transcript_segment(video_id, start_time=None, end_time=None):
-    """Get transcript segment between specified timestamps (in seconds)."""
-    if video_id not in video_cache or "Transcript" not in video_cache[video_id]:
-        return "Transcript not found in cache"
-    
-    transcript = video_cache[video_id]["Transcript"]
-    
-    # If no time range specified, return full transcript
-    if start_time is None and end_time is None:
-        return transcript
-    
-    # Extract segments based on timestamps
-    segments = []
-    timestamp_pattern = r'\[(\d{2}):(\d{2}):(\d{2})\]([^[]*)'
-    matches = re.findall(timestamp_pattern, transcript)
-    
-    for match in matches:
-        hours, minutes, seconds, text = match
-        timestamp_seconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
-        
-        # Check if timestamp is within range
-        if start_time is not None and timestamp_seconds < start_time:
-            continue
-        if end_time is not None and timestamp_seconds > end_time:
-            break
-            
-        segments.append(f"[{hours}:{minutes}:{seconds}]{text}")
-    
-    return " ".join(segments)
+        # Catch any other unexpected errors during the QA process
+        print(f"Error answering video question for {video_id} with question '{question}': {e}")
+        # Transform general exceptions into a RuntimeError for the API layer
+        raise RuntimeError(f"Error processing question: {str(e)}")

@@ -35,14 +35,6 @@ const formatAbsoluteDate = (dateString) => {
   }
 };
 
-const stripHtml = (html) => {
-  if (typeof document !== "undefined") {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    return doc.body.textContent || "";
-  }
-  return html.replace(/<[^>]+>/g, "");
-};
-
 export default function WatchPage() {
   const router = useRouter();
   const { v: videoIdFromQuery } = router.query;
@@ -94,7 +86,7 @@ export default function WatchPage() {
         const apiVideo = data.results;
         const transformedVideoData = {
           id: videoId,
-          title: stripHtml(apiVideo.Title),
+          title: apiVideo.Title,
           channelName: apiVideo.Channel,
           subscribers: apiVideo.Subscribers,
           views: apiVideo.Views,
@@ -186,18 +178,25 @@ export default function WatchPage() {
           const errorData = await commentsRes
             .json()
             .catch(() => ({ detail: "Unknown server error" }));
-          throw new Error(
-            `Comments Fetch: ${errorData.detail || commentsRes.statusText}`
+          if (commentsRes.status === 404) {
+            setCommentsWithSentiments([]);
+            console.log(
+              `Video ID ${videoId}: No comments found (handled 404).`
+            );
+          } else {
+            throw new Error(
+              `Comments Fetch: ${errorData.detail || commentsRes.statusText}`
+            );
+          }
+        } else {
+          const commentsData = await commentsRes.json();
+          if (commentsData.error) throw new Error(commentsData.error);
+
+          const rawComments = commentsData.results || [];
+          setCommentsWithSentiments(
+            rawComments.map((c) => ({ ...c, sentiment: null }))
           );
         }
-
-        const commentsData = await commentsRes.json();
-        if (commentsData.error) throw new Error(commentsData.error);
-
-        const rawComments = commentsData.results || [];
-        setCommentsWithSentiments(
-          rawComments.map((c) => ({ ...c, sentiment: null }))
-        );
       } catch (err) {
         console.error("Error fetching comments:", err);
         setErrorComments(err.message);

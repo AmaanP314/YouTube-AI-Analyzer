@@ -17,13 +17,20 @@ async def get_sentiments(comments):
             async with session.post(API_URL, json=payload) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("sentiments", [])
+                    sentiments = data.get("sentiments", [])
+                    if not sentiments and comments:
+                        raise ValueError("Sentiment API returned an empty list of sentiments.")
+                    return sentiments
                 else:
-                    print(f"Error: Received {response.status} from API")
-                    return []
+                    error_detail = await response.text()
+                    print(f"Error: Received {response.status} from API. Detail: {error_detail}")
+                    raise RuntimeError(f"Sentiment API returned status {response.status}: {error_detail}")
+        except aiohttp.ClientError as e:
+            print(f"Network error connecting to sentiment API: {e}")
+            raise RuntimeError(f"Could not connect to sentiment API: {str(e)}")
         except Exception as e:
-            print(f"Error in get_sentiment_async: {e}")
-            return []
+            print(f"An unexpected error occurred in get_sentiments: {e}")
+            raise RuntimeError(f"An unexpected error occurred during sentiment analysis: {str(e)}")
         
 # search query with pagination token
 async def fetch_video_data(search_query, max_results, sort_by='relevance', page_token=None):
@@ -139,9 +146,8 @@ async def search_youtube(query, sort_by='relevance', max_results=5, page_token=N
     df = pd.DataFrame(structured_data)
     try:
         df['Upload_date'] = pd.to_datetime(df['Upload_date'].str.split('T').str[0])
-        df['Likes(%)'] = (df['Likes']) / (df['Views']) * 100
-        df = df[['Title', 'Channel', 'Subscribers', 'Views', 'Likes', 'Likes(%)', 'Duration', 'Upload_date', 'Comments', 'Video_link', 'Thumbnail', 'Channel_Thumbnail', 'Description']]
-        df['Title'] = df.apply(lambda row: f'<a href="{row["Video_link"]}" target="_blank">{row["Title"]}</a>', axis=1)
+        df['Likes_percentage'] = (df['Likes']) / (df['Views']) * 100
+        df = df[['Title', 'Channel', 'Subscribers', 'Views', 'Likes', 'Likes_percentage', 'Duration', 'Upload_date', 'Comments', 'Video_link', 'Thumbnail', 'Channel_Thumbnail', 'Description']]
         return df, next_page_token
     except Exception as e:
         print(f"An error occurred while processing the data: {e}")
@@ -192,9 +198,8 @@ async def search_video(video_id):
     df = pd.DataFrame([video_info])
     try:
         df['Upload_date'] = pd.to_datetime(df['Upload_date'].str.split('T').str[0])
-        df['Likes(%)'] = (df['Likes']) / (df['Views']) * 100
-        df = df[['Title', 'Channel', 'Subscribers', 'Views', 'Likes', 'Likes(%)', 'Duration', 'Upload_date', 'Comments', 'Video_link', 'Thumbnail', 'Channel_Thumbnail', 'Description']]
-        df['Title'] = df.apply(lambda row: f'<a href="{row["Video_link"]}" target="_blank">{row["Title"]}</a>', axis=1)
+        df['Likes_percentage'] = (df['Likes']) / (df['Views']) * 100
+        df = df[['Title', 'Channel', 'Subscribers', 'Views', 'Likes', 'Likes_percentage', 'Duration', 'Upload_date', 'Comments', 'Video_link', 'Thumbnail', 'Channel_Thumbnail', 'Description']]
         return df
     except Exception as e:
         print(f"An error occurred while processing the data: {e}")

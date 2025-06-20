@@ -25,3 +25,5 @@ myenv
 /frontend/youtube/.vercel/
 /frontend/youtube/out/
 /frontend/youtube/dist/
+
+__pycache__/

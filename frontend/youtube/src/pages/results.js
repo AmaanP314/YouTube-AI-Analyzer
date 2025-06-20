@@ -44,14 +44,6 @@ const formatUploadDate = (dateString) => {
   }
 };
 
-const stripHtml = (html) => {
-  if (typeof document !== "undefined") {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    return doc.body.textContent || "";
-  }
-  return html.replace(/<[^>]+>/g, "");
-};
-
 const transformApiData = (videosFromApi) => {
   if (!videosFromApi || videosFromApi.length === 0) return [];
   const calculateCompositeScore = (v) => {
@@ -78,12 +70,12 @@ const transformApiData = (videosFromApi) => {
     }
     return {
       id: videoId,
-      title: stripHtml(video.Title),
+      title: video.Title,
       channelName: video.Channel,
       subscribers: video.Subscribers,
       views: video.Views,
       likes: video.Likes,
-      likesPercentage: video["Likes(%)"],
+      likesPercentage: video.Likes_percentage,
       uploadTimeRaw: video.Upload_date,
       uploadTimeFormatted: formatUploadDate(video.Upload_date),
       duration: video.Duration,
