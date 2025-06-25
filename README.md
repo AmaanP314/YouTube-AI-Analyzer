@@ -12,16 +12,16 @@ The project is built with a **Next.js** frontend and a **FastAPI** backend. The 
 # Table of Contents
 
 - [Features](#features)  
-  - [Index Page (`/`)](#index-page-)  
-  - [Results Page (`/results`)](#results-page-)  
-  - [Watch Page (`/watch`)](#watch-page-)  
+  - [Index Page (`/`)](#index-page)
+  - [Results Page (`/results`)](#results-page)  
+  - [Watch Page (`/watch`)](#watch-page)  
 - [Tech Stack](#tech-stack)  
 - [Project Structure](#project-structure)  
 - [⚙️ Local Setup and Installation](#️-local-setup-and-installation)  
   - [Prerequisites](#prerequisites)  
-  - [Clone the Repository](#clone-the-repository)  
-  - [Backend Setup](#backend-setup)  
-  - [Frontend Setup](#frontend-setup)  
+  - [Clone the Repository](#1-clone-the-repository)  
+  - [Backend Setup](#2-backend-setup)  
+  - [Frontend Setup](#3-frontend-setup)  
   - [Running the Full Application](#running-the-full-application)  
 - [🐳 Docker Deployment](#-docker-deployment)  
 - [API Endpoint Documentation](#api-endpoint-documentation)  
@@ -33,14 +33,12 @@ The project is built with a **Next.js** frontend and a **FastAPI** backend. The 
 - [Contact](#contact)  
 
 
-
-
-
-
 ## Features
 
 The application is structured across **three primary pages**, each offering a unique set of functionalities designed for **in-depth content analysis**.
 
+---
+<a name="index-page"></a>
 ### 1. **Index Page** (`/`)
 
 The landing page provides a clean, focused entry point into the application.
@@ -50,9 +48,8 @@ The landing page provides a clean, focused entry point into the application.
 
 * **Analysis Mode Toggle**
   Accessible from the header's dropdown menu, this global switch allows users to enable or disable all **resource-intensive analysis features** across the application, providing control over API usage and performance.
-
 ---
-
+<a name="results-page"></a>
 ### 2. **Results Page** (`/results`)
 ![result page](https://github.com/AmaanP314/YouTube-AI-Analyzer/blob/d404fc77e9727ce99d4d36dcd0d292e40a2ed800/frontend/youtube/public/results.png)
 
@@ -92,7 +89,7 @@ The results page uses **session storage** to remember the complete state of your
 * **Click-to-scroll interactivity is enhanced**: tapping a chart bar switches to the video list and scrolls to the corresponding video.
 
 ---
-
+<a name="watch-page"></a>
 ### 3. **Watch Page** (`/watch`)
 ![result page](https://github.com/AmaanP314/YouTube-AI-Analyzer/blob/d404fc77e9727ce99d4d36dcd0d292e40a2ed800/frontend/youtube/public/watch.png)
 
@@ -120,8 +117,20 @@ This section contains **AI-generated insights**, which can be toggled globally v
 
 * **AI-Generated Summaries**
 
-  * **Video Summary**: Generated from the video’s full transcript.
-  * **Comment Summary**: Identifies **themes, praise, criticism**, and common opinions from the comments.
+  * **Video Summary**:
+    1. **Purpose**: This section provides an overall structure of the video, including the main points covered, and highlights which claims made in the video are factually accurate and which are not.
+
+    2. **Why it's helpful**:
+This summary helps viewers quickly grasp the core content of the video without watching the entire thing. It’s especially useful for those who are short on time or are trying to evaluate whether the video is worth watching in full. By clearly identifying which points are backed by facts and which are misleading or inaccurate, this section helps viewers make more informed decisions and avoid misinformation.
+
+  * **Comment Summary**:
+    1. **Purpose**: This section analyzes the video’s comment section by identifying common themes, praise, criticism, and viewer opinions. It also distinguishes between factually accurate points and misleading or incorrect statements made by commenters.
+    2. **Why it's helpful**:
+This is valuable for two main groups:
+
+        For **Viewers**: It helps them understand what the broader audience thinks about the video, offering insights into whether the content is worth their time, aligns with their expectations, or contains issues that others have already pointed out.
+        
+        For **Content Creators**: It serves as a useful audience feedback tool, allowing creators to understand what viewers appreciate, what they criticize, and what improvements they suggest. This feedback is crucial for refining future content, better engaging with their community, and delivering more tailored and impactful content.
   * A toggle allows easy switching between summary types.
 
 * **Interactive Q\&A Assistant**
@@ -131,10 +140,12 @@ This section contains **AI-generated insights**, which can be toggled globally v
 
     * **Video Q\&A**: e.g., *"What tools did the creator recommend?"*
     * **Comments Q\&A**: e.g., *"What was the main criticism in the comments?"*
+  * **Why it's helpful**: This feature makes the experience more interactive and efficient, allowing users to quickly get targeted answers without having to sift through the entire summary or watch the full video. It's ideal for viewers looking for specific information and for content creators who want to zero in on feedback or patterns in viewer engagement. By enabling context-aware Q&A, the assistant becomes a smart navigation tool, saving users time and offering more personalized insights based on what they care about most.
   * The input is only enabled when the relevant summary is available.
 
-* **Sentiment Distribution Chart**
-  A bar chart showing the **percentage breakdown** of positive, neutral, and negative comments.
+* **Sentiment Distribution Chart**:
+  - A bar chart showing the **percentage breakdown** of positive, neutral, and negative comments. The sentiment analysis is powered by a **large language model (LLM)** fine-tuned by me on a dataset of **over 1 million sentiment-labeled YouTube comments**, ensuring high relevance and accuracy in the YouTube context.
+  - You can find the model here: [youtube-xlm-roberta-base-sentiment-multilingual](https://huggingface.co/AmaanP314/youtube-xlm-roberta-base-sentiment-multilingual),
 
 #### 📱 Mobile Responsiveness
 
