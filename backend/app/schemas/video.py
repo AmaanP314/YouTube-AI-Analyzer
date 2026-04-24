@@ -41,3 +41,9 @@ class Summary(BaseModel):
 
 class QAResponse(BaseModel):
     results: str
+
+class SummarizeFromContentRequest(BaseModel):
+    transcript_xml: str
+    video_id: str
+    title: str
+    channel_name: str

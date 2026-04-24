@@ -8,7 +8,7 @@ export default function VideoPlayer({ videoId }) {
       </div>
     );
   }
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1?modestbranding=0?rel=0`;
   return (
     <div className="aspect-video w-full rounded-xl overflow-hidden">
       <iframe

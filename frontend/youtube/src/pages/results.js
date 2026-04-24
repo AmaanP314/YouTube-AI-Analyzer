@@ -63,7 +63,7 @@ const transformApiData = (videosFromApi) => {
       }
     } catch (e) {
       const idMatch = video.Video_link.match(
-        /(?:[?&]v=|\/embed\/|\/1\/|\/v\/|https?:\/\/(?:www\.)?youtu\.be\/)([^&\n?#]+)/
+        /(?:[?&]v=|\/embed\/|\/1\/|\/v\/|https?:\/\/(?:www\.)?youtu\.be\/)([^&\n?#]+)/,
       );
       if (idMatch && idMatch[1]) videoId = idMatch[1];
       else videoId = video.Video_link;
@@ -88,7 +88,7 @@ const transformApiData = (videosFromApi) => {
   });
 };
 
-const MAX_RESULTS_PER_PAGE = 10;
+const MAX_RESULTS_PER_PAGE = 5;
 
 export default function ResultsPage() {
   const router = useRouter();
@@ -128,8 +128,8 @@ export default function ResultsPage() {
     try {
       const response = await fetch(
         `${apiUrl}/search?query=${encodeURIComponent(
-          query
-        )}&max_results=${MAX_RESULTS_PER_PAGE}`
+          query,
+        )}&max_results=${MAX_RESULTS_PER_PAGE}`,
       );
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -147,7 +147,7 @@ export default function ResultsPage() {
             results: transformedData,
             nextPageToken: data.results.nextPageToken,
             hasMorePages: !!data.results.nextPageToken,
-          })
+          }),
         );
       } else {
         setSearchResults([]);
@@ -170,8 +170,8 @@ export default function ResultsPage() {
     try {
       const response = await fetch(
         `${apiUrl}/search?query=${encodeURIComponent(
-          query
-        )}&max_results=${MAX_RESULTS_PER_PAGE}&page_token=${nextPageToken}`
+          query,
+        )}&max_results=${MAX_RESULTS_PER_PAGE}&page_token=${nextPageToken}`,
       );
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -188,7 +188,7 @@ export default function ResultsPage() {
               results: updatedResults,
               nextPageToken: data.results.nextPageToken,
               hasMorePages: !!data.results.nextPageToken,
-            })
+            }),
           );
           return updatedResults;
         });
@@ -255,7 +255,7 @@ export default function ResultsPage() {
           loadMoreResults();
         }
       },
-      { threshold: 1.0 }
+      { threshold: 1.0 },
     );
     const currentSentinel = observerSentinel.current;
     if (currentSentinel) observer.observe(currentSentinel);

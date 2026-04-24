@@ -1,4 +1,4 @@
-import re
+import asyncio
 import yt_dlp
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from ..db import crud
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite-001", google_api_key=GOOGLE_API_KEY)
-embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", google_api_key=GOOGLE_API_KEY)
+embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=GOOGLE_API_KEY)
 
 local_cache = {}
 
@@ -136,7 +136,7 @@ def fetch_transcript(video_id, preferred_langs=['en-orig', 'en']):
         print(f"An unexpected error occurred during yt-dlp extraction: {e}")
         return []
 
-def get_transcript(db: Session, video_id: str) -> str:
+async def get_transcript(db: Session, video_id: str) -> str:
     """Fetch transcript from DB cache or from source, then cache it."""
     cached_video = crud.get_or_create_video_store(db, video_id)
     if cached_video and cached_video.transcript:
@@ -145,7 +145,9 @@ def get_transcript(db: Session, video_id: str) -> str:
 
     print(f"Fetching transcript from source for video ID: {video_id}")
     try:
-        captions = fetch_transcript(video_id)
+        loop = asyncio.get_event_loop()
+        captions = await loop.run_in_executor(None, fetch_transcript, video_id)
+        # captions = fetch_transcript(video_id)
         if not captions:
             raise ValueError(f"No transcript available for video ID: {video_id}")
 
@@ -287,7 +289,7 @@ async def summarize_video(db: Session, video_id: str, title: str='', channel_nam
         print(f"Using cached video summary for video ID: {video_id}")
         return cached_video.video_summary
     try:
-        transcript = get_transcript(db, video_id)
+        transcript = await get_transcript(db, video_id)
         if not transcript:
             raise ValueError("Transcript not found, cannot summarize.")
         
@@ -312,6 +314,63 @@ async def summarize_video(db: Session, video_id: str, title: str='', channel_nam
         # Catch any other unexpected errors during the summarization process (e.g., LLM issues)
         print(f"Error creating video summary for {video_id}: {e}")
         raise RuntimeError(f"Error creating summary: {str(e)}")
+
+async def summarize_from_xml_content(db: Session, request_data: dict):
+    """
+    Processes raw XML transcript from the client, generates a summary, and caches it.
+    """
+    video_id = request_data.get('video_id')
+    transcript_xml = request_data.get('transcript_xml')
+    title = request_data.get('title', '')
+    channel_name = request_data.get('channel_name', '')
+
+    if not all([video_id, transcript_xml]):
+        raise ValueError("Missing video_id or transcript_xml in request.")
+
+    # Check for a cached summary first to save costs
+    cached_video = crud.get_or_create_video_store(db, video_id)
+    if cached_video and cached_video.video_summary:
+        print(f"Using cached video summary for video ID: {video_id}")
+        return cached_video.video_summary
+
+    # Parse the XML content provided by the client
+    captions = parse_subtitle_content(transcript_xml)
+    if not captions:
+        raise ValueError("Provided XML content could not be parsed or was empty.")
+
+    # Format the parsed transcript into a single string
+    formatted_lines = []
+    for snippet in captions:
+        total_seconds = int(snippet['start'])
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        timestamp = f"({hours:02}:{minutes:02}:{seconds:02})"
+        formatted_line = f"{timestamp} {snippet['text']}"
+        formatted_lines.append(formatted_line)
+    
+    full_transcript = " ".join(formatted_lines)
+    
+    # Update the database with the transcript for future QA use
+    crud.update_transcript(db, video_id=video_id, transcript=full_transcript)
+    
+    # Generate the summary using the existing LLM chain
+    transcript_docs = Document(page_content=full_transcript)
+    summary_chain = load_summarize_chain(llm=llm, chain_type="stuff", prompt=summary_prompt) # Assumes summary_prompt is defined above
+    response = summary_chain.invoke({
+        "input_documents": [transcript_docs],
+        "title": title,
+        "channel_name": channel_name
+    })
+    summary = response['output_text'].strip()
+
+    if not summary:
+        raise RuntimeError("LLM returned an empty summary.")
+
+    # Cache the new summary in the database
+    crud.update_video_summary(db, video_id=video_id, summary=summary)
+    
+    return summary
 
 async def answer_video_question(db: Session, video_id: str, question: str):
     try:

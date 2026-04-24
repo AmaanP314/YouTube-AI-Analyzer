@@ -21,7 +21,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    # allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -100,9 +101,9 @@ async def get_video_details(video_id: str):
         404: {"model": video_schema.ErrorDetailResponse, "description": "Transcript not found or unavailable for the given video ID."},
         500: {"model": video_schema.ErrorDetailResponse, "description": "Internal server error during transcript retrieval."}
     })
-def get_video_transcript(video_id: str, db: Session = Depends(get_db)):
+async def get_video_transcript(video_id: str, db: Session = Depends(get_db)):
     try:
-        transcript = video_analysis.get_transcript(db, video_id)
+        transcript = await video_analysis.get_transcript(db, video_id)
         return {
             "results": transcript,
             "length": len(transcript),
@@ -184,6 +185,27 @@ async def video_qa(
         print(f"An unexpected error occurred in video_qa endpoint for {video_id} with question '{question}': {e}")
         raise HTTPException(status_code=500, detail=f"An unknown internal error occurred: {str(e)}")
 
+
+@app.post("/video/summarize-from-content",
+          response_model=video_schema.Summary,
+          tags=["Video"],
+          description="Receives raw transcript XML from the client, processes, and returns a summary.",
+          responses={
+             400: {"model": video_schema.ErrorDetailResponse, "description": "Invalid input data"},
+             500: {"model": video_schema.ErrorDetailResponse, "description": "Internal server error"}
+         })
+async def summarize_from_content(request: video_schema.SummarizeFromContentRequest, db: Session = Depends(get_db)):
+    try:
+        # Use .model_dump() for Pydantic v2+ or .dict() for v1
+        summary = await video_analysis.summarize_from_xml_content(db, request.model_dump())
+        return {"results": summary}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=500, detail=str(re))
+    except Exception as e:
+        print(f"An unexpected error occurred in summarize_from_content: {e}")
+        raise HTTPException(status_code=500, detail="An unknown internal error occurred.")
 
 # --- Comment Endpoints ---
 
